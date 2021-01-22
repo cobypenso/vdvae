@@ -229,6 +229,7 @@ class VAE(HModule):
     def forward(self, x, x_target):
         activations = self.encoder.forward(x)
         px_z, stats = self.decoder.forward(activations)
+        import ipdb; ipdb.set_trace()
         distortion_per_pixel = self.decoder.out_net.nll(px_z, x_target)
         rate_per_pixel = torch.zeros_like(distortion_per_pixel)
         ndims = np.prod(x.shape[1:])
