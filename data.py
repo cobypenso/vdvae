@@ -6,11 +6,18 @@ from torch.utils.data import TensorDataset
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
 from sklearn.model_selection import train_test_split
-
+import h5py
 
 def set_up_data(H):
     shift_loss = -127.5
     scale_loss = 1. / 127.5
+    
+    if H.dataset == 'custom':
+        trX, vaX, teX = custom(H.data_root)
+        H.image_size = 32
+        H.image_channels = 3
+        shift = -116.2373
+        scale = 1. / 69.37404
     if H.dataset == 'imagenet32':
         trX, vaX, teX = imagenet32(H.data_root)
         H.image_size = 32
@@ -107,6 +114,15 @@ def unpickle_cifar10(file):
     return data
 
 
+def custom(data_root):
+    directory = "./"
+    trX, test = load_h5_dataset(directory)
+    np.random.seed(42)
+    tr_va_split_indices = np.random.permutation(trX.shape[0])
+    train = trX[tr_va_split_indices[:-5000]]
+    valid = trX[tr_va_split_indices[-5000:]]
+    return train, valid, test
+
 def imagenet32(data_root):
     trX = np.load(os.path.join(data_root, 'imagenet32-train.npy'), mmap_mode='r')
     np.random.seed(42)
@@ -161,3 +177,32 @@ def cifar10(data_root, one_hot=True):
         vaY = np.reshape(vaY, [-1, 1])
         teY = np.reshape(teY, [-1, 1])
     return (trX, trY), (vaX, vaY), (teX, teY)
+
+
+def load_h5_dataset(directory):
+    print(" --------------------------------- ")
+    print("Start loading Datasat from H5DF files...")
+    data = []
+    flagOneFile = 0
+    for filename in os.listdir(directory):
+        if flagOneFile:
+            break
+        if filename.endswith(".h5"):
+            with h5py.File(filename, "r") as f:
+                a_group_key = list(f.keys())[0]
+                # Get the data
+                temp = list(f[a_group_key])
+                data.append(temp[1:])
+                flagOneFile = 1
+            continue
+        else:
+            continue
+    data_flat = [item for sublist in data for item in sublist]
+    data_flat = np.stack(data_flat, axis=0)
+    precent_train_test_split = 0.7
+    train = data_flat[:int(np.floor(precent_train_test_split * data_flat.shape[0])), :]
+    test = data_flat[int(np.floor(precent_train_test_split * data_flat.shape[0])) + 1:, :]
+    print(" --------------------------------- ")
+    print("Finish loading Datasat from H5DF files...")
+
+    return train, test

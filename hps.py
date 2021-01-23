@@ -11,8 +11,26 @@ class Hyperparams(dict):
     def __setattr__(self, attr, value):
         self[attr] = value
 
+###  ---------------------- ImageGPT output Dataset ---------------- ###
+
+custom = Hyperparams()
+custom.dataset = 'custom'
+custom.ema_rate = 0.999
+custom.dec_blocks = "1x2,4m1,4x4,8m4,8x9,16m8,16x19,32m16,32x40"
+custom.enc_blocks = "32x15,32d2,16x9,16d2,8x8,8d2,4x6,4d4,1x6"
+custom.width = 512
+custom.n_batch = 32
+custom.lr = 0.00015
+custom.grad_clip = 200.
+custom.skip_threshold = 300.
+custom.epochs_per_eval = 1
+custom.epochs_per_eval_save = 1
+HPARAMS_REGISTRY['custom'] = custom
+
+###  ----------------------------- END ------------------------------ ###
 
 cifar10 = Hyperparams()
+cifar10.update(custom)
 cifar10.width = 384
 cifar10.lr = 0.0002
 cifar10.zdim = 16
@@ -115,7 +133,7 @@ def add_vae_arguments(parser):
     parser.add_argument('--restore_ema_path', type=str, default=None)
     parser.add_argument('--restore_log_path', type=str, default=None)
     parser.add_argument('--restore_optimizer_path', type=str, default=None)
-    parser.add_argument('--dataset', type=str, default='cifar10')
+    parser.add_argument('--dataset', type=str, default='custom')
 
     parser.add_argument('--ema_rate', type=float, default=0.999)
 
