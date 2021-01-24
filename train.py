@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from data import set_up_data
 from train_helpers import set_up_hyperparams, load_vaes, load_opt, accumulate_stats, save_model, update_ema
-
+import utils
 
 def training_step(H, data_input, target, vae, ema_vae, optimizer, iterate):
     t0 = time.time()
@@ -53,9 +53,11 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
     stats = []
     iters_since_starting = 0
     H.ema_rate = torch.as_tensor(H.ema_rate).cuda()
+    
     for epoch in range(starting_epoch, H.num_epochs):
         for x in DataLoader(data_train, batch_size=H.n_batch, drop_last=True, pin_memory=True):
             data_input, target = preprocess_fn(x)
+            data_input = data_input.cuda()
             training_stats = training_step(H, data_input, target, vae, ema_vae, optimizer, iterate)
             stats.append(training_stats)
             scheduler.step()
@@ -68,9 +70,9 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
             iterate += 1
             iters_since_starting += 1
             if iterate % H.iters_per_save == 0:
-                if np.isfinite(stats[-1]['elbo']):
+                if np.isfinite(((stats[-1])['elbo']).detach().cpu().numpy()):
                     logprint(model=H.desc, type='train_loss', epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
-                    fp = os.path.join(H.save_dir, 'latest')
+                    fp = os.path.join(H.save_dir, 'iteration_{}'.format(iterate))
                     logprint(f'Saving model@ {iterate} to {fp}')
                     save_model(fp, vae, ema_vae, optimizer, H)
 
@@ -80,6 +82,8 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
         if epoch % H.epochs_per_eval == 0:
             valid_stats = evaluate(H, ema_vae, data_valid, preprocess_fn)
             logprint(model=H.desc, type='eval_loss', epoch=epoch, step=iterate, **valid_stats)
+        print ("first batch of epoch: ", stats[0])
+        print ("last batch of epoch: ", stats[-1])
 
 
 def evaluate(H, ema_vae, data_valid, preprocess_fn):
@@ -87,23 +91,25 @@ def evaluate(H, ema_vae, data_valid, preprocess_fn):
     for x in DataLoader(data_valid, batch_size=H.n_batch, drop_last=True, pin_memory=True):
         data_input, target = preprocess_fn(x)
         stats_valid.append(eval_step(data_input, target, ema_vae))
-    vals = [a['elbo'] for a in stats_valid]
+    vals = [a['elbo'].item() for a in stats_valid]
     finites = np.array(vals)[np.isfinite(vals)]
-    stats = dict(n_batches=len(vals), filtered_elbo=np.mean(finites), **{k: np.mean([a[k] for a in stats_valid]) for k in stats_valid[-1]})
+    stats = dict(n_batches=len(vals), filtered_elbo=np.mean(finites), **{k: np.mean([a[k].item() for a in stats_valid]) for k in stats_valid[-1]})
     return stats
 
 
 def write_images(H, ema_vae, viz_batch_original, viz_batch_processed, fname, logprint):
     zs = [s['z'].cuda() for s in ema_vae.forward_get_latents(viz_batch_processed)]
+    viz_batch_original = viz_batch_original.view(-1, 32, 32)
     batches = [viz_batch_original.numpy()]
     mb = viz_batch_processed.shape[0]
     lv_points = np.floor(np.linspace(0, 1, H.num_variables_visualize + 2) * len(zs)).astype(int)[1:-1]
     for i in lv_points:
-        batches.append(ema_vae.forward_samples_set_latents(mb, zs[:i], t=0.1))
+        batches.append(ema_vae.forward_samples_set_latents(mb, zs[:i], t=0.1).cpu().view(-1, 32, 32))
     for t in [1.0, 0.9, 0.8, 0.7][:H.num_temperatures_visualize]:
-        batches.append(ema_vae.forward_uncond_samples(mb, t=t))
+        batches.append(ema_vae.forward_uncond_samples(mb, t=t).cpu().view(-1, 32, 32))
     n_rows = len(batches)
-    im = np.concatenate(batches, axis=0).reshape((n_rows, mb, *viz_batch_processed.shape[1:])).transpose([0, 2, 1, 3, 4]).reshape([n_rows * viz_batch_processed.shape[1], mb * viz_batch_processed.shape[2], 3])
+    im = utils.clusters_to_images(torch.from_numpy(np.concatenate(batches, axis=0))).permute(0,2,3,1)
+    im = im.reshape((n_rows, mb, 32, 32, 3)).permute(0, 2, 1, 3, 4).reshape([n_rows * 32, mb * 32, 3])
     logprint(f'printing samples to {fname}')
     imageio.imwrite(fname, im)
 

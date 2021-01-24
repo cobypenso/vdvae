@@ -11,14 +11,13 @@ import h5py
 def set_up_data(H):
     shift_loss = -127.5
     scale_loss = 1. / 127.5
-    
     if H.dataset == 'custom':
         trX, vaX, teX = custom(H.data_root)
         H.image_size = 32
         H.image_channels = 3
         shift = -116.2373
         scale = 1. / 69.37404
-    if H.dataset == 'imagenet32':
+    elif H.dataset == 'imagenet32':
         trX, vaX, teX = imagenet32(H.data_root)
         H.image_size = 32
         H.image_channels = 3
@@ -84,6 +83,8 @@ def set_up_data(H):
         nonlocal untranspose
         'takes in a data example and returns the preprocessed input'
         'as well as the input processed for the loss'
+        
+        import ipdb; ipdb.set_trace()
         if untranspose:
             x[0] = x[0].permute(0, 2, 3, 1)
         inp = x[0].cuda(non_blocking=True).float()
@@ -93,9 +94,13 @@ def set_up_data(H):
             # 5 bits of precision
             out.mul_(1. / 8.).floor_().mul_(8.)
         out.add_(shift_loss).mul_(scale_loss)
+        
         return inp, out
-
-    return H, train_data, valid_data, preprocess_func
+    def preprocess_func_custom(x):
+        return x[0],x[0]
+    
+    return_func = preprocess_func_custom if H.dataset=='custom' else preprocess_func
+    return H, train_data, valid_data, return_func
 
 
 def mkdir_p(path):
@@ -121,6 +126,7 @@ def custom(data_root):
     tr_va_split_indices = np.random.permutation(trX.shape[0])
     train = trX[tr_va_split_indices[:-5000]]
     valid = trX[tr_va_split_indices[-5000:]]
+    
     return train, valid, test
 
 def imagenet32(data_root):

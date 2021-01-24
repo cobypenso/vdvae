@@ -5,7 +5,7 @@ from vae_helpers import HModule, get_1x1, get_3x3, DmolNet, draw_gaussian_diag_s
 from collections import defaultdict
 import numpy as np
 import itertools
-
+import utils
 
 class Block(nn.Module):
     def __init__(self, in_width, middle_width, out_width, down_rate=None, residual=False, use_3x3=True, zero_last=False):
@@ -208,6 +208,7 @@ class Decoder(HModule):
             except TypeError:
                 temp = t
             xs = block.forward_uncond(xs, temp)
+            
         xs[self.H.image_size] = self.final_fn(xs[self.H.image_size])
         return xs[self.H.image_size]
 
@@ -225,12 +226,17 @@ class VAE(HModule):
     def build(self):
         self.encoder = Encoder(self.H)
         self.decoder = Decoder(self.H)
-
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.Softmax(dim=1)
+        
     def forward(self, x, x_target):
+        x = utils.clusters_to_images(x).permute(0,2,3,1)
+        x = x.cuda()
+        x_target = x_target.cuda()
         activations = self.encoder.forward(x)
         px_z, stats = self.decoder.forward(activations)
-        import ipdb; ipdb.set_trace()
-        distortion_per_pixel = self.decoder.out_net.nll(px_z, x_target)
+        px_z_log = self.logsoftmax(px_z)
+        distortion_per_pixel = self.decoder.out_net.nll(px_z_log, x_target)
         rate_per_pixel = torch.zeros_like(distortion_per_pixel)
         ndims = np.prod(x.shape[1:])
         for statdict in stats:
@@ -240,14 +246,18 @@ class VAE(HModule):
         return dict(elbo=elbo, distortion=distortion_per_pixel.mean(), rate=rate_per_pixel.mean())
 
     def forward_get_latents(self, x):
+        x = utils.clusters_to_images(x).permute(0,2,3,1)
+        x = x.cuda()
         activations = self.encoder.forward(x)
         _, stats = self.decoder.forward(activations, get_latents=True)
         return stats
 
     def forward_uncond_samples(self, n_batch, t=None):
         px_z = self.decoder.forward_uncond(n_batch, t=t)
+        px_z = self.softmax(px_z)
         return self.decoder.out_net.sample(px_z)
 
     def forward_samples_set_latents(self, n_batch, latents, t=None):
         px_z = self.decoder.forward_manual_latents(n_batch, latents, t=t)
+        px_z = self.softmax(px_z)
         return self.decoder.out_net.sample(px_z)

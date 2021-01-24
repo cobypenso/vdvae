@@ -16,10 +16,11 @@ class Hyperparams(dict):
 custom = Hyperparams()
 custom.dataset = 'custom'
 custom.ema_rate = 0.999
+custom.warmup_iters = 1
 custom.dec_blocks = "1x2,4m1,4x4,8m4,8x9,16m8,16x19,32m16,32x40"
 custom.enc_blocks = "32x15,32d2,16x9,16d2,8x8,8d2,4x6,4d4,1x6"
 custom.width = 512
-custom.n_batch = 32
+custom.n_batch = 8
 custom.lr = 0.00015
 custom.grad_clip = 200.
 custom.skip_threshold = 300.
@@ -166,7 +167,7 @@ def add_vae_arguments(parser):
 
     parser.add_argument('--iters_per_ckpt', type=int, default=25000)
     parser.add_argument('--iters_per_print', type=int, default=1000)
-    parser.add_argument('--iters_per_save', type=int, default=10000)
+    parser.add_argument('--iters_per_save', type=int, default=4000)
     parser.add_argument('--iters_per_images', type=int, default=10000)
     parser.add_argument('--epochs_per_eval', type=int, default=10)
     parser.add_argument('--epochs_per_probe', type=int, default=None)

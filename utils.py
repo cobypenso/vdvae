@@ -103,3 +103,13 @@ def plot_images_grid(x: torch.tensor, export_img, title: str = '', nrow=8, paddi
     npgrid = grid.cpu().numpy()
     im = np.transpose(npgrid, (1, 2, 0))
     plt.imsave(export_img,im)
+    
+def clusters_to_images(samples):
+    pathToCluster = "/home/dsi/coby_penso/projects/generative_models/vdvae_openai/kmeans_centers.npy"
+    data_tor = torch.reshape(samples, [-1, 32, 32])
+    clusters = torch.from_numpy(np.load(pathToCluster)).float()
+    #sample_new = torch.round(127.5 * (clusters[data_tor.long()] + 1.0))
+    sample_new = (clusters[data_tor.long()] + 1.0) / 2
+    sample_new = sample_new.permute(0, 3, 1, 2).contiguous()
+
+    return sample_new

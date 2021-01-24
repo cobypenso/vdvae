@@ -152,15 +152,27 @@ class DmolNet(nn.Module):
 
     def nll(self, px_z, x):
         criteria = nn.NLLLoss(reduction = 'none')
-        #new_nll = criteria(px_z, x)
-        old_nll = discretized_mix_logistic_loss(x=x, l=self.forward(px_z), low_bit=self.H.dataset in ['ffhq_256'])
-        return old_nll
+        new_nll = criteria(px_z.view(px_z.shape[0], 512, -1), x.long())
+        new_nll = torch.mean(new_nll, dim=1)
+        #old_nll = discretized_mix_logistic_loss(x=x, l=self.forward(px_z), low_bit=self.H.dataset in ['ffhq_256'])
+        return new_nll
 
     def forward(self, px_z):
         xhat = self.out_conv(px_z)
         return xhat.permute(0, 2, 3, 1)
 
     def sample(self, px_z):
+    
+        # ----- px_z (batch, 512, 32, 32)------#
+        px_z_transpose = px_z.permute(0,2,3,1).reshape(-1,512)
+        # ----- px_z_transpose (batch, 32, 32, 512)------#
+        samples = torch.multinomial(px_z_transpose, 1, replacement=True)
+        
+        samples = samples.to(dtype=torch.float).mean(dim=1).to(dtype=torch.int64)
+        
+        return samples.view(px_z.shape[0], px_z.shape[2], px_z.shape[3])
+
+        
         im = sample_from_discretized_mix_logistic(self.forward(px_z), self.H.num_mixtures)
         xhat = (im + 1.0) * 127.5
         xhat = xhat.detach().cpu().numpy()

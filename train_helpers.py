@@ -14,7 +14,7 @@ from torch.optim import Adam
 #from apex.optimizers import FusedAdam as AdamW
 from vae import VAE
 from torch.nn.parallel.distributed import DistributedDataParallel
-
+import subprocess
 
 def update_ema(vae, ema_vae, ema_rate):
     for p1, p2 in zip(vae.parameters(), ema_vae.parameters()):
@@ -44,14 +44,15 @@ def accumulate_stats(stats, frequency):
             else:
                 z[k] = np.max(finites)
         elif k == 'elbo':
-            vals = [a[k] for a in stats[-frequency:]]
+            
+            vals = [a[k].item() for a in stats[-frequency:]]
             finites = np.array(vals)[np.isfinite(vals)]
             z['elbo'] = np.mean(vals)
             z['elbo_filtered'] = np.mean(finites)
         elif k == 'iter_time':
             z[k] = stats[-1][k] if len(stats) < frequency else np.mean([a[k] for a in stats[-frequency:]])
         else:
-            z[k] = np.mean([a[k] for a in stats[-frequency:]])
+            z[k] = np.mean([a[k].item() for a in stats[-frequency:]])
     return z
 
 
