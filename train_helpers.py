@@ -125,9 +125,9 @@ def load_vaes(H, logprint):
 def load_opt(H, vae, logprint):
     optimizer = Adam(vae.parameters(), weight_decay=H.wd, lr=H.lr, betas=(H.adam_beta1, H.adam_beta2))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=linear_warmup(H.warmup_iters))
-
     if H.restore_optimizer_path:
-        optimizer.load_state_dict(H.restore_optimizer_path)
+        state_dict = torch.load(H.restore_optimizer_path)
+        optimizer.load_state_dict(state_dict)
     cur_eval_loss, iterate, starting_epoch = float('inf'), 0, 0
     logprint('starting at epoch', starting_epoch, 'iterate', iterate, 'eval loss', cur_eval_loss)
     return optimizer, scheduler, cur_eval_loss, iterate, starting_epoch

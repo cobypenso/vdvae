@@ -3,6 +3,7 @@ import imageio
 import os
 import time
 import torch
+import sys
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from data import set_up_data
@@ -69,22 +70,17 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
 
             iterate += 1
             iters_since_starting += 1
-            if iterate % H.iters_per_save == 0:
-                if np.isfinite(((stats[-1])['elbo']).detach().cpu().numpy()):
-                    logprint(model=H.desc, type='train_loss', epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
-                    fp = os.path.join(H.save_dir, 'iteration_{}'.format(iterate))
-                    logprint(f'Saving model@ {iterate} to {fp}')
-                    save_model(fp, vae, ema_vae, optimizer, H)
-
-            if iterate % H.iters_per_ckpt == 0:
-                save_model(os.path.join(H.save_dir, f'iter-{iterate}'), vae, ema_vae, optimizer, H)
+            
+        if epoch % H.epochs_per_save == 0:
+            if np.isfinite(((stats[-1])['elbo']).detach().cpu().numpy()):
+                logprint(model=H.desc, type='train_loss', epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
+                fp = os.path.join(H.save_dir, 'epoch_{}_'.format(epoch))
+                logprint(f'Saving model@ {iterate} to {fp}')
+                save_model(fp, vae, ema_vae, optimizer, H)
 
         if epoch % H.epochs_per_eval == 0:
             valid_stats = evaluate(H, ema_vae, data_valid, preprocess_fn)
             logprint(model=H.desc, type='eval_loss', epoch=epoch, step=iterate, **valid_stats)
-        print ("first batch of epoch: ", stats[0])
-        print ("last batch of epoch: ", stats[-1])
-
 
 def evaluate(H, ema_vae, data_valid, preprocess_fn):
     stats_valid = []
