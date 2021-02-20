@@ -120,14 +120,18 @@ class DecBlock(nn.Module):
         pm, pv, xpp = feats[:, :self.zdim, ...], feats[:, self.zdim:self.zdim * 2, ...], feats[:, self.zdim * 2:, ...]
         x = x + xpp
         z = draw_gaussian_diag_samples(qm, qv)
-        # log_q_zGx = torch.sum(-0.5*(((z-qm)/torch.exp(qv))**2) - torch.log(torch.sqrt(2*pi*torch.exp(qv))))
-        # log_p_z = torch.sum(-0.5*((z-pm)/torch.exp(pv))**2 - torch.log(torch.sqrt(2*pi*torch.exp(pv))))
+
+        # --- Calculate probabilities --- #
+        #TODO - this part still in development, isn't working yet
+        #       (no effect on other functionalities such as training, sampling etc')
         log_q_zGx = Normal(qm, torch.exp(qv)).log_prob(z)
         normalize_q = Normal(qm, torch.exp(qv)).log_prob(qm)
         log_p_z = Normal(pm, torch.exp(qv)).log_prob(z)
         normalize_p = Normal(pm, torch.exp(pv)).log_prob(pm)
         log_q_zGx = log_q_zGx - normalize_q
         log_p_z = log_p_z - normalize_p
+
+        # ------------------------------- #
 
         kl = gaussian_analytical_kl(qm, pm, qv, pv)
         return z, x, kl, log_q_zGx, log_p_z
