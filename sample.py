@@ -11,7 +11,7 @@ from train_helpers import set_up_hyperparams, load_vaes, load_opt, accumulate_st
 import matplotlib.pyplot as plt
 
 def sample(H, vae, ema_vae, logprint):
-    fname = "sample.png"
+    fname = "sample2.png"
     mb = 8
     batches = []
     for t in [1.0] * 10:

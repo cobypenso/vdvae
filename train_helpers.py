@@ -128,6 +128,6 @@ def load_opt(H, vae, logprint):
     if H.restore_optimizer_path:
         state_dict = torch.load(H.restore_optimizer_path)
         optimizer.load_state_dict(state_dict)
-    cur_eval_loss, iterate, starting_epoch = float('inf'), 0, 0
+    cur_eval_loss, iterate, starting_epoch = float('inf'), 60000, 125
     logprint('starting at epoch', starting_epoch, 'iterate', iterate, 'eval loss', cur_eval_loss)
     return optimizer, scheduler, cur_eval_loss, iterate, starting_epoch

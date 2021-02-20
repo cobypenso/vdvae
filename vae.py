@@ -6,6 +6,8 @@ from collections import defaultdict
 import numpy as np
 import itertools
 import utils
+from torch.distributions import Normal 
+
 
 class Block(nn.Module):
     def __init__(self, in_width, middle_width, out_width, down_rate=None, residual=False, use_3x3=True, zero_last=False):
@@ -112,13 +114,23 @@ class DecBlock(nn.Module):
         self.z_fn = lambda x: self.z_proj(x)
 
     def sample(self, x, acts):
+        pi = 3.1415927410125732
         qm, qv = self.enc(torch.cat([x, acts], dim=1)).chunk(2, dim=1)
         feats = self.prior(x)
         pm, pv, xpp = feats[:, :self.zdim, ...], feats[:, self.zdim:self.zdim * 2, ...], feats[:, self.zdim * 2:, ...]
         x = x + xpp
         z = draw_gaussian_diag_samples(qm, qv)
+        # log_q_zGx = torch.sum(-0.5*(((z-qm)/torch.exp(qv))**2) - torch.log(torch.sqrt(2*pi*torch.exp(qv))))
+        # log_p_z = torch.sum(-0.5*((z-pm)/torch.exp(pv))**2 - torch.log(torch.sqrt(2*pi*torch.exp(pv))))
+        log_q_zGx = Normal(qm, torch.exp(qv)).log_prob(z)
+        normalize_q = Normal(qm, torch.exp(qv)).log_prob(qm)
+        log_p_z = Normal(pm, torch.exp(qv)).log_prob(z)
+        normalize_p = Normal(pm, torch.exp(pv)).log_prob(pm)
+        log_q_zGx = log_q_zGx - normalize_q
+        log_p_z = log_p_z - normalize_p
+
         kl = gaussian_analytical_kl(qm, pm, qv, pv)
-        return z, x, kl
+        return z, x, kl, log_q_zGx, log_p_z
 
     def sample_uncond(self, x, t=None, lvs=None):
         n, c, h, w = x.shape
@@ -147,13 +159,13 @@ class DecBlock(nn.Module):
         x, acts = self.get_inputs(xs, activations)
         if self.mixin is not None:
             x = x + F.interpolate(xs[self.mixin][:, :x.shape[1], ...], scale_factor=self.base // self.mixin)
-        z, x, kl = self.sample(x, acts)
+        z, x, kl, log_q_zGx, log_p_z = self.sample(x, acts)
         x = x + self.z_fn(z)
         x = self.resnet(x)
         xs[self.base] = x
         if get_latents:
-            return xs, dict(z=z.detach(), kl=kl)
-        return xs, dict(kl=kl)
+            return xs, dict(z=z.detach(), kl=kl, log_q_zGx=log_q_zGx, log_p_z=log_p_z)
+        return xs, dict(kl=kl, log_q_zGx=log_q_zGx, log_p_z=log_p_z)
 
     def forward_uncond(self, xs, t=None, lvs=None):
         try:
@@ -249,7 +261,7 @@ class VAE(HModule):
         x = utils.clusters_to_images(x).permute(0,2,3,1)
         x = x.cuda()
         activations = self.encoder.forward(x)
-        _, stats = self.decoder.forward(activations, get_latents=True)
+        recon, stats = self.decoder.forward(activations, get_latents=True)
         return stats
 
     def forward_uncond_samples(self, n_batch, t=None):
@@ -257,7 +269,9 @@ class VAE(HModule):
         px_z = self.softmax(px_z)
         return self.decoder.out_net.sample(px_z)
 
-    def forward_samples_set_latents(self, n_batch, latents, t=None):
+    def forward_samples_set_latents(self, n_batch, latents, t=None, prob_vector=False):
         px_z = self.decoder.forward_manual_latents(n_batch, latents, t=t)
         px_z = self.softmax(px_z)
+        if prob_vector:
+            return self.decoder.out_net.sample(px_z), px_z
         return self.decoder.out_net.sample(px_z)
