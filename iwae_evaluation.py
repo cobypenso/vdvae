@@ -11,7 +11,7 @@ from train_helpers import set_up_hyperparams, load_vaes, load_opt, accumulate_st
 import matplotlib.pyplot as plt
 
 
-def iwae_calc(x, H, ema_vae, logprint, K = 50):
+def iwae_calc(x, H, ema_vae, logprint, K = 1):
     '''
         Pass image through the VAE and calculate the log likelihood 
         more accurently than the ELBO estimator -> IWAE
@@ -31,10 +31,10 @@ def iwae_calc(x, H, ema_vae, logprint, K = 50):
 
         # add all the log_q_zGx to form the total log_q_zGx, same for log_p_z
         # calculate log_p_z
-        log_p_z = torch.sum(torch.Tensor([torch.sum(p) for p in log_p_z]))
+        log_p_z = torch.mean(torch.Tensor([torch.mean(p) for p in log_p_z]))
 
         # calculate log_q_zGx
-        log_q_zGx = torch.sum(torch.Tensor([torch.sum(q) for q in log_q_zGx]))
+        log_q_zGx = torch.mean(torch.Tensor([torch.mean(q) for q in log_q_zGx]))
         
         # Get the ouput of the decoder given specific latents
         mb = x.shape[0]
@@ -42,15 +42,18 @@ def iwae_calc(x, H, ema_vae, logprint, K = 50):
         xhat, p_xGz = ema_vae.forward_samples_set_latents(mb, zs, t=1.0, prob_vector=True)
     
         #calculate log_p_xGz
-        log_p_xGz = torch.sum(torch.log(p_xGz).gather(1, xhat[:,None,:,:]))
+        log_p_xGz = torch.mean(torch.log(p_xGz).gather(1, xhat[:,None,:,:]))
 
         #calculate (p_xGz * p_z / q_zGx) by calculating exp(log_p_xGz + log_p_z - log_zGx)
         iwae_one_sample = torch.exp(log_p_xGz + log_p_z - log_q_zGx)
-        import ipdb; ipdb.set_trace()
-        
+        print (iwae_one_sample)
         sum += iwae_one_sample
         
-    iwae = torch.log(sum / K)
+    iwae = -torch.log(sum / K)
+    stats = ema_vae.forward(x[None, :], x[None, :])
+    print(stats['elbo'])
+    print(iwae)
+
     return iwae
     
     
@@ -62,8 +65,8 @@ def main():
     dict_x_nll = {}
     vae, ema_vae = load_vaes(H, logprint)
     for idx, x in enumerate(data_train):
-        log_p_x = iwae_calc(x, H, ema_vae, logprint)
-        dict_x_nll[x] = log_p_x
+        nll = iwae_calc(x, H, ema_vae, logprint)
+        dict_x_nll[x] = nll
     
     # -- Save results to file -- #
     
