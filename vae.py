@@ -255,6 +255,7 @@ class VAE(HModule):
         distortion_per_pixel = self.decoder.out_net.nll(px_z_log, x_target)
         rate_per_pixel = torch.zeros_like(distortion_per_pixel)
         ndims = np.prod(x.shape[1:])
+    
         for statdict in stats:
             rate_per_pixel += statdict['kl'].sum(dim=(1, 2, 3))
         rate_per_pixel /= ndims
