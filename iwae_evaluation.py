@@ -16,7 +16,7 @@ def iwae_calc(x, H, ema_vae, logprint, K = 200):
         @param: x - the image to compute iwae on
         @param: ema_vae - vae model
     '''
-    x = x[0]
+    x = x[0].cuda()
     sum = 0
     
     for i in range(K):
@@ -38,7 +38,7 @@ def elbo_calc(x, H, ema_vae, logprint, K = 200):
         @param: x - the image to compute iwae on
         @param: ema_vae - vae model
     '''
-    x = x[0]
+    x = x[0].cuda()
     sum = 0
     
     for i in range(K):
@@ -50,7 +50,7 @@ def elbo_calc(x, H, ema_vae, logprint, K = 200):
     return elbo
 
 def iwae_calc_manual(x, H, ema_vae, logprint, K = 200):
-    x = x[0]
+    x = x[0].cuda()
     sum = 0
     
     for i in range(K):
@@ -62,21 +62,24 @@ def iwae_calc_manual(x, H, ema_vae, logprint, K = 200):
         # Get the ouput of the decoder given specific latents
         mb = 1
         zs = [s['z'].cuda() for s in stats]
-        xhat, p_xGz = ema_vae.forward_samples_set_latents(mb, zs, t=1.0, prob_vector=True)
-    
+        xhat, log_p_xGz, px_z = ema_vae.forward_samples_set_latents(mb, zs, t=1.0, prob_vector=True, x = x)
+        
         #calculate log_p_xGz
-        log_p_xGz = torch.mean(torch.log(p_xGz).gather(1, xhat[:,None,:,:]))
-
+        # x_as_ind = x.to(dtype=torch.int64)
+        # log_p_xGz = torch.mean(torch.log(px_z).gather(1, x_as_ind.reshape(xhat.shape)[:,None,:,:]))
         # add all the log_q_zGx to form the total log_q_zGx, same for log_p_z
         # calculate log_p_z
-        log_p_z = torch.mean(torch.Tensor([torch.mean(p) for p in log_p_z]))
-
-        # calculate log_q_zGx
-        log_q_zGx = torch.mean(torch.Tensor([torch.mean(q) for q in log_q_zGx]))
+        count = len(log_p_z)
+        for i in log_p_z:
+            count += np.prod(i.shape)
+        log_p_z = torch.sum(torch.Tensor([torch.sum(p) for p in log_p_z])) / 97
+        count = len(log_q_zGx)
+        for i in log_q_zGx:
+            count += np.prod(i.shape)
+        log_q_zGx = torch.sum(torch.Tensor([torch.sum(q) for q in log_q_zGx])) / 97
 
         #calculate (p_xGz * p_z / q_zGx) by calculating exp(log_p_xGz + log_p_z - log_zGx)
         iwae_one_sample = torch.exp(log_p_xGz + log_p_z - log_q_zGx)
-        print (iwae_one_sample)
         sum += iwae_one_sample
     
     iwae = -torch.log(sum/K)
@@ -94,9 +97,9 @@ def main():
     total_iter = 0
 
     for idx, x in enumerate(data_train):
-        iwae = iwae_calc(x, H, ema_vae, logprint)
-        elbo = elbo_calc(x, H, ema_vae, logprint)
-
+        iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=1)
+        elbo = elbo_calc(x, H, ema_vae, logprint, K=1)
+        print ('IWAE: ',iwae,' ELBO: ', elbo)
         if iwae <= elbo:
             count += 1
         total_iter += 1

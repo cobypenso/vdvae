@@ -124,12 +124,8 @@ class DecBlock(nn.Module):
         # --- Calculate probabilities --- #
         #TODO - this part still in development, isn't working yet
         #       (no effect on other functionalities such as training, sampling etc')
-        log_q_zGx = Normal(qm, torch.exp(qv)).log_prob(z)
-        normalize_q = Normal(qm, torch.exp(qv)).log_prob(qm)
-        log_p_z = Normal(pm, torch.exp(qv)).log_prob(z)
-        normalize_p = Normal(pm, torch.exp(pv)).log_prob(pm)
-        log_q_zGx = log_q_zGx - normalize_q
-        log_p_z = log_p_z - normalize_p
+        log_q_zGx = Normal(0, 1).log_prob((z - qm)/torch.exp(pv))
+        log_p_z = Normal(0, 1).log_prob((z- pm)/torch.exp(qv))
 
         # ------------------------------- #
 
@@ -252,6 +248,7 @@ class VAE(HModule):
         activations = self.encoder.forward(x)
         px_z, stats = self.decoder.forward(activations)
         px_z_log = self.logsoftmax(px_z)
+        #Check here
         distortion_per_pixel = self.decoder.out_net.nll(px_z_log, x_target)
         rate_per_pixel = torch.zeros_like(distortion_per_pixel)
         ndims = np.prod(x.shape[1:])
@@ -274,9 +271,11 @@ class VAE(HModule):
         px_z = self.softmax(px_z)
         return self.decoder.out_net.sample(px_z)
 
-    def forward_samples_set_latents(self, n_batch, latents, t=None, prob_vector=False):
+    def forward_samples_set_latents(self, n_batch, latents, t=None, prob_vector=False, x = None):
         px_z = self.decoder.forward_manual_latents(n_batch, latents, t=t)
-        px_z = self.softmax(px_z)
+        px_z_log = self.logsoftmax(px_z)
+        if x is not None:
+            px_z_log = self.decoder.out_net.nll(px_z_log, x[None, :])
         if prob_vector:
-            return self.decoder.out_net.sample(px_z), px_z
-        return self.decoder.out_net.sample(px_z)
+            return self.decoder.out_net.sample(self.softmax(px_z)), px_z_log, self.softmax(px_z)
+        return self.decoder.out_net.sample(self.softmax(px_z))
