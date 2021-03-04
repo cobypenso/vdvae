@@ -136,6 +136,7 @@ def add_vae_arguments(parser):
     parser.add_argument('--restore_log_path', type=str, default=None)
     parser.add_argument('--restore_optimizer_path', type=str, default=None)
     parser.add_argument('--dataset', type=str, default='custom')
+    parser.add_argument('--model_type', type=str, default='large')
 
     parser.add_argument('--ema_rate', type=float, default=0.999)
 
