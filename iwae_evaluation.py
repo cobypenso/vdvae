@@ -5,7 +5,9 @@ from torch.utils.data import DataLoader
 from data import set_up_data
 import utils
 from train_helpers import set_up_hyperparams, load_vaes, load_opt, accumulate_stats, save_model, update_ema
-
+import pickle
+from vae import VAE
+from train_helpers import restore_params
 
 def iwae_calc(x, H, ema_vae, logprint, K = 200):
     '''
@@ -84,33 +86,56 @@ def iwae_calc_manual(x, H, ema_vae, logprint, K = 200):
     
     iwae = -torch.log(sum/K)
     return iwae
-    
+
+
+def load_trained_vaes(H, logprint, epoch):
+    vae = VAE(H)
+    model_type = H.model_type
+    if model_type != 'large' and model_type != 'larger' and model_type != 'medium':
+        logprint(f'No such model type!!')
+        raise Exception('No such model type!')
+
+    restore_path = "./saved_models/" + model_type + "_model/test/epoch_" + str(epoch) + "_-model.th"
+    restore_path_ema = "./saved_models/" + model_type + "_model/test/epoch_" + str(epoch) + "_-model-ema.th"
+
+    logprint(f'Restoring vae from {restore_path}')
+    restore_params(vae, restore_path)
+
+    ema_vae = VAE(H)
+    logprint(f'Restoring ema vae from {restore_path_ema}')
+    restore_params(ema_vae, restore_path_ema)
+    ema_vae.requires_grad_(False)
+
+    vae = vae.cuda()
+    ema_vae = ema_vae.cuda()
+
+    if len(list(vae.named_parameters())) != len(list(vae.parameters())):
+        raise ValueError('Some params are not named. Please name all params.')
+    total_params = 0
+    for name, p in vae.named_parameters():
+        total_params += np.prod(p.shape)
+    logprint(total_params=total_params, readable=f'{total_params:,}')
+    return vae, ema_vae
+
 def main():
     H, logprint = set_up_hyperparams()
     H, data_train, data_valid_or_test, preprocess_fn = set_up_data(H)
     
-    # -- Calculate Log{P(x)} for every x in the dataset -- #
-    dict_x_nll = {}
-    vae, ema_vae = load_vaes(H, logprint)
-
-    count = 0 
-    total_iter = 0
-
-    for idx, x in enumerate(data_train):
-        iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=1)
-        elbo = elbo_calc(x, H, ema_vae, logprint, K=1)
-        print ('IWAE: ',iwae,' ELBO: ', elbo)
-        if iwae <= elbo:
-            count += 1
-        total_iter += 1
-
-        dict_x_nll[x] = iwae
-
-        if total_iter % 10 == 0:
-            print(count / total_iter * 100,'%')
+        # Load the models from various epochs #
+    epochs = [250, 200, 150, 100, 50, 0]
     
-    # -- Save results to file -- #
-    
-    
+    for epoch in epochs:
+        vae, ema_vae = load_trained_vaes(H, logprint, epoch)
+        # -- Calculate -Log{P(x)} for every x in the dataset -- #
+        dict_x_nll = {}
+
+        for x in data_train:
+            # iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=1)
+            elbo = elbo_calc(x, H, ema_vae, logprint, K=1)
+            dict_x_nll[x] = elbo
+        # -- Save results to file -- #
+        fname = H.model_type + "_model_elbo_calc_epoch_" + str(epoch) +".p"
+        pickle.dump(dict_x_nll, open(fname, "wb"))
+        
 if __name__ == "__main__":
     main()
