@@ -240,7 +240,25 @@ class VAE(HModule):
         self.decoder = Decoder(self.H)
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.softmax = nn.Softmax(dim=1)
+    
+    def forward_with_sum_nll(self, x, x_target):
+        x = utils.clusters_to_images(x).permute(0,2,3,1)
+        x = x.cuda()
+        x_target = x_target.cuda()
+        activations = self.encoder.forward(x)
+        px_z, stats = self.decoder.forward(activations)
+        px_z_log = self.logsoftmax(px_z)
+        #Check here
+        distortion_per_pixel = self.decoder.out_net.nll_with_sum(px_z_log, x_target)
+        rate_per_pixel = torch.zeros_like(distortion_per_pixel)
+        ndims = np.prod(x.shape[1:])
         
+        for statdict in stats:
+            rate_per_pixel += statdict['kl'].sum(dim=(1, 2, 3))
+        rate_per_pixel /= ndims
+        elbo = (distortion_per_pixel + rate_per_pixel).mean()
+        return dict(elbo=elbo, distortion=distortion_per_pixel.mean(), rate=rate_per_pixel.mean())
+
     def forward(self, x, x_target):
         x = utils.clusters_to_images(x).permute(0,2,3,1)
         x = x.cuda()

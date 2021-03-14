@@ -154,7 +154,12 @@ class DmolNet(nn.Module):
         criteria = nn.NLLLoss(reduction = 'none')
         new_nll = criteria(px_z.view(px_z.shape[0], 512, -1), x.long())
         new_nll = torch.mean(new_nll, dim=1)
-        #old_nll = discretized_mix_logistic_loss(x=x, l=self.forward(px_z), low_bit=self.H.dataset in ['ffhq_256'])
+        return new_nll
+
+    def nll_with_sum(self, px_z, x):
+        criteria = nn.NLLLoss(reduction = 'none')
+        new_nll = criteria(px_z.view(px_z.shape[0], 512, -1), x.long())
+        new_nll = torch.sum(new_nll, dim=1)
         return new_nll
 
     def forward(self, px_z):

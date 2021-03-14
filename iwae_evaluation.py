@@ -44,7 +44,7 @@ def elbo_calc(x, H, ema_vae, logprint, K = 200):
     sum = 0
     
     for i in range(K):
-        stats = ema_vae.forward(x[None, :], x[None, :])
+        stats = ema_vae.forward_with_sum_nll(x[None, :], x[None, :])
         sum += stats['elbo']
         
     elbo = sum / K
@@ -121,21 +121,21 @@ def main():
     H, logprint = set_up_hyperparams()
     H, data_train, data_valid_or_test, preprocess_fn = set_up_data(H)
     
-        # Load the models from various epochs #
-    epochs = [250, 200, 150, 100, 50, 0]
+    # Load the models from various epochs #
+    epochs = [250, 225, 200, 175, 150, 125, 100, 75, 50, 25, 0]
     
     for epoch in epochs:
         vae, ema_vae = load_trained_vaes(H, logprint, epoch)
         # -- Calculate -Log{P(x)} for every x in the dataset -- #
-        dict_x_nll = {}
-
+        elbo_list = []
         for x in data_train:
             # iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=1)
-            elbo = elbo_calc(x, H, ema_vae, logprint, K=1)
-            dict_x_nll[x] = elbo
+            elbo = elbo_calc(x, H, ema_vae, logprint, K=5)
+            elbo_list.append(elbo)
         # -- Save results to file -- #
         fname = H.model_type + "_model_elbo_calc_epoch_" + str(epoch) +".p"
-        pickle.dump(dict_x_nll, open(fname, "wb"))
+        pickle.dump(elbo_list, open(fname, "wb"))
+        print ("Epoch calc ended")
         
 if __name__ == "__main__":
     main()
