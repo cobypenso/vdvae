@@ -51,35 +51,43 @@ def elbo_calc(x, H, ema_vae, logprint, K = 200):
 
     return elbo
 
-def iwae_calc_manual(x, H, ema_vae, logprint, K = 200):
+def iwae_calc_manual(x, H, ema_vae, logprint, K = 200, idx=0):
     x = x[0].cuda()
     sum = 0
     iwae_list = []
     for i in range(K):
         # Get the latents and stats
-        stats = ema_vae.forward_get_latents(x)
+        try:
+            stats = ema_vae.forward_get_latents(x)
+            
+            log_q_zGx = [(s['log_q_zGx']) for s in stats]
+            log_p_z = [(s['log_p_z']) for s in stats]
         
-        log_q_zGx = [(s['log_q_zGx'].cpu()) for s in stats]
-        log_p_z = [(s['log_p_z'].cpu()) for s in stats]
-    
-        # Get the ouput of the decoder given specific latents
-        mb = 1
-        zs = [s['z'].cuda() for s in stats]
-        #calculate log_p_xGz
-        
-        xhat, log_p_xGz, px_z = ema_vae.forward_samples_set_latents(mb, zs, t=1.0, prob_vector=True, x = x)
-        if type(log_p_xGz) != int:
-            log_p_xGz = log_p_xGz.to('cpu')
-    
-        # calculate log_p_z
-        log_p_z = torch.sum(torch.Tensor([torch.sum(p) for p in log_p_z]))
-        
-        log_q_zGx = torch.sum(torch.Tensor([torch.sum(q) for q in log_q_zGx]))
-        
-        iwae_one_sample = (log_p_xGz + log_p_z - log_q_zGx)
+            # Get the ouput of the decoder given specific latents
+            mb = 1
+            zs = [s['z'].cuda() for s in stats]
+            #calculate log_p_xGz
+            
+            xhat, log_p_xGz,_ = ema_vae.forward_samples_set_latents(mb, zs, t=1.0, prob_vector=True, x = x)
+            
+            # calculate log_p_z
+            log_p_z = torch.sum(torch.Tensor([torch.sum(p) for p in log_p_z]))
+            log_p_z = np.nan_to_num(log_p_z.cpu())
+            
+            log_q_zGx = torch.sum(torch.Tensor([torch.sum(q) for q in log_q_zGx]))
+            log_q_zGx = np.nan_to_num(log_q_zGx.cpu())
+            
+            if log_p_xGz:
+                log_p_xGz = np.nan_to_num(log_p_xGz.cpu())
+                iwae_one_sample = torch.Tensor((log_p_xGz + log_p_z - log_q_zGx)).cuda()
+            else:
+                iwae_one_sample = torch.Tensor((log_p_z - log_q_zGx)).cuda()
+            
+        except:
+            iwae_one_sample = torch.zeros(1).to('cuda')
+            
         iwae_list.append(iwae_one_sample)
-    
-    
+        
     iwae_tensor = torch.cat(iwae_list, dim = 0)
     iwae_tensor = iwae_tensor.to('cpu')
     iwae_tensor = torch.from_numpy(np.nan_to_num(iwae_tensor))
@@ -144,7 +152,7 @@ def main_train():
         # -- Calculate -Log{P(x)} for every x in the dataset -- #
         elbo_list = []
         for x in data_train:
-            iwae = iwae_calc_manual(x.cuda(), H, ema_vae, logprint, K=50)
+            iwae = iwae_calc_manual(x.cuda(), H, ema_vae, logprint, K=10)
             # elbo = elbo_calc(x, H, ema_vae, logprint, K=5)
             # print ('elbo: ', elbo, ' iwae: ', iwae)
             elbo_list.append(iwae)
@@ -161,25 +169,21 @@ def main_test():
     #250, 225, 200, 175, 150, 125, 100, 75, 50, 
     # epochs = [250, 225, 200, 175, 150, 125, 100, 75, 50, 0]
     
-    epochs_g1 = [250, 225, 200]
-    epochs_g2 = [175, 150, 125]
-    epochs_g3 = [100, 75, 50, 0]
-    if H.group == 'g1':
-        epochs = epochs_g1
-    elif H.group == 'g2':
-        epochs = epochs_g2
-    else:
-        epochs = epochs_g3
+    epochs = [25]
 
     for epoch in epochs:
         vae, ema_vae = load_trained_vaes(H, logprint, epoch)
         # -- Calculate -Log{P(x)} for every x in the dataset -- #
         elbo_list = []
         for idx, x in enumerate(data_valid_or_test):
-            iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=50)
-            # elbo = elbo_calc(x, H, ema_vae, logprint, K=5)
-            # print ('elbo: ', elbo, ' iwae: ', iwae)
-            elbo_list.append(iwae)
+            
+            if torch.sum(np.isfinite(x[0])) - x[0].shape[0] > 0:
+                elbo_list.append(0)
+            else:
+                iwae = iwae_calc_manual(x, H, ema_vae, logprint, K=10, idx = idx)
+                # elbo = elbo_calc(x, H, ema_vae, logprint, K=5)
+                # print ('elbo: ', elbo, ' iwae: ', iwae)
+                elbo_list.append(iwae)
             print(str(idx)+' image - '+str(iwae))
         # -- Save results to file -- #
         fname = H.model_type + "_model_iwae_calc_epoch_" + str(epoch) +"_test.p"

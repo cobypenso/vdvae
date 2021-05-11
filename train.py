@@ -26,7 +26,7 @@ def training_step(H, data_input, target, vae, ema_vae, optimizer, iterate):
     if stats['distortion_nans'] == 0 and stats['rate_nans'] == 0 and (H.skip_threshold == -1 or grad_norm < H.skip_threshold):
         optimizer.step()
         skipped_updates = 0
-        update_ema(vae, ema_vae, H.ema_rate)
+        # update_ema(vae, ema_vae, H.ema_rate)
 
     t1 = time.time()
     stats.update(skipped_updates=skipped_updates, iter_time=t1 - t0, grad_norm=grad_norm)
@@ -53,10 +53,9 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
     early_evals = set([1] + [2 ** exp for exp in range(3, 14)])
     stats = []
     iters_since_starting = 0
-    H.ema_rate = torch.as_tensor(H.ema_rate).cuda()
-    
+    # H.ema_rate = torch.as_tensor(H.ema_rate).cuda()
     for epoch in range(starting_epoch, H.num_epochs):
-        for x in DataLoader(data_train, batch_size=H.n_batch, drop_last=True, pin_memory=True):
+        for x in DataLoader(data_train, batch_size=H.n_batch, drop_last=True):
             data_input, target = preprocess_fn(x)
             data_input = data_input.cuda()
             training_stats = training_step(H, data_input, target, vae, ema_vae, optimizer, iterate)
@@ -64,23 +63,27 @@ def train_loop(H, data_train, data_valid, preprocess_fn, vae, ema_vae, logprint)
             scheduler.step()
             if iterate % H.iters_per_print == 0 or iters_since_starting in early_evals:
                 logprint(model=H.desc, type='train_loss', lr=scheduler.get_last_lr()[0], epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
+                stats = []
 
-            if iterate % H.iters_per_images == 0 or (iters_since_starting in early_evals and H.dataset != 'ffhq_1024'):
-                write_images(H, ema_vae, viz_batch_original, viz_batch_processed, f'{H.save_dir}/samples-{iterate}.png', logprint)
+            # if iterate % H.iters_per_images == 0 or (iters_since_starting in early_evals and H.dataset != 'ffhq_1024'):
+            #     wow = 0
+            #     # write_images(H, ema_vae, viz_batch_original, viz_batch_processed, f'{H.save_dir}/samples-{iterate}.png', logprint)
+            data_input = data_input.cpu()
 
             iterate += 1
             iters_since_starting += 1
-            
-        if epoch % H.epochs_per_save == 0:
-            if np.isfinite(((stats[-1])['elbo']).detach().cpu().numpy()):
-                logprint(model=H.desc, type='train_loss', epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
+
+        if epoch % 1 == 0:
+        # if epoch % H.epochs_per_save == 0:
+            if np.isfinite(((training_stats)['elbo']).detach().cpu().numpy()):
+                # logprint(model=H.desc, type='train_loss', epoch=epoch, step=iterate, **accumulate_stats(stats, H.iters_per_print))
                 fp = os.path.join(H.save_dir, 'epoch_{}_'.format(epoch))
                 logprint(f'Saving model@ {iterate} to {fp}')
-                save_model(fp, vae, ema_vae, optimizer, H)
+                save_model(fp, vae, ema_vae, optimizer, H, save_opt=True)
 
-        if epoch % H.epochs_per_eval == 0:
-            valid_stats = evaluate(H, ema_vae, data_valid, preprocess_fn)
-            logprint(model=H.desc, type='eval_loss', epoch=epoch, step=iterate, **valid_stats)
+        # if epoch % H.epochs_per_eval == 0:
+        #     valid_stats = evaluate(H, ema_vae, data_valid, preprocess_fn)
+        #     logprint(model=H.desc, type='eval_loss', epoch=epoch, step=iterate, **valid_stats)
 
 def evaluate(H, ema_vae, data_valid, preprocess_fn):
     stats_valid = []
@@ -122,7 +125,8 @@ def run_test_eval(H, ema_vae, data_test, preprocess_fn, logprint):
 def main():
     H, logprint = set_up_hyperparams()
     H, data_train, data_valid_or_test, preprocess_fn = set_up_data(H)
-    
+    print("train size: ",len(data_train))
+    print("test size: ", len(data_valid_or_test))
     vae, ema_vae = load_vaes(H, logprint)
     if H.test_eval:
         run_test_eval(H, ema_vae, data_valid_or_test, preprocess_fn, logprint)

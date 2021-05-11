@@ -22,7 +22,7 @@ custom.dec_blocks = "1x2,4m1,4x4,8m4,8x8,16m8,16x10,32m16,32x30"
 custom.enc_blocks = "32x15,32d2,16x9,16d2,8x8,8d2,4x6,4d4,1x6"
 custom.width = 512
 custom.n_batch = 8
-custom.lr = 0.00015
+custom.lr = 0.00005
 custom.grad_clip = 200.
 custom.skip_threshold = 300.
 custom.epochs_per_eval = 10
@@ -137,7 +137,8 @@ def add_vae_arguments(parser):
     parser.add_argument('--restore_optimizer_path', type=str, default=None)
     parser.add_argument('--dataset', type=str, default='custom')
     parser.add_argument('--model_type', type=str, default='large')
-
+    parser.add_argument('--group', type=str, default='g1')
+    
     parser.add_argument('--ema_rate', type=float, default=0.999)
 
     parser.add_argument('--enc_blocks', type=str, default=None)
@@ -170,7 +171,7 @@ def add_vae_arguments(parser):
     parser.add_argument('--iters_per_ckpt', type=int, default=25000)
     parser.add_argument('--iters_per_print', type=int, default=1000)
     parser.add_argument('--iters_per_save', type=int, default=4000)
-    parser.add_argument('--epochs_per_save', type=int, default=25)
+    parser.add_argument('--epochs_per_save', type=int, default=5)
     parser.add_argument('--iters_per_images', type=int, default=10000)
     parser.add_argument('--epochs_per_eval', type=int, default=10)
     parser.add_argument('--epochs_per_probe', type=int, default=None)
@@ -178,4 +179,9 @@ def add_vae_arguments(parser):
     parser.add_argument('--num_images_visualize', type=int, default=8)
     parser.add_argument('--num_variables_visualize', type=int, default=6)
     parser.add_argument('--num_temperatures_visualize', type=int, default=3)
+    
+    
+    parser.add_argument('--starting_iterate', type=int, default=0)
+    parser.add_argument('--starting_epoch', type=int, default=0)
+    parser.add_argument('--epoch', type=int, default=0)
     return parser

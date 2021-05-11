@@ -123,9 +123,9 @@ transform = transforms.Compose([transforms.ToTensor(),
                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                                 ])
                                 
-dict_is = {'medium':{}, 'large':{}, 'larger':{}}
-for model_type in ['medium', 'large', 'larger']:
-    for i in [0,25,50,75,100,125,150,175,200,225,250]:
+dict_is = {'medium_model_lower_lr':{}}
+for model_type in ['medium_model_lower_lr']:
+    for i in [0,1,5,10,15,20,25,30,35,40,45,50]:
         fname = './samples_' + model_type + '/model_epoch_' + str(i)
         dataset = SamplesForlder(fname, transform=transform)
         mean_split_scores, std_split_scores = inception_score(dataset, cuda=True, batch_size=32, resize=True, splits=1)
@@ -133,7 +133,7 @@ for model_type in ['medium', 'large', 'larger']:
 
 print("Calculating Inception Score...")
 print(dict_is)
-pickle.dump(dict_is, open('Inception_Score_for_all_models.p', "wb"))
+pickle.dump(dict_is, open('Inception_Score_for_medium_models.p', "wb"))
 
 """Computes the inception score of the generated images imgs
 imgs -- Torch dataset of (3xHxW) numpy images normalized in the range [-1, 1]

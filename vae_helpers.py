@@ -171,8 +171,11 @@ class DmolNet(nn.Module):
         # ----- px_z (batch, 512, 32, 32)------#
         px_z_transpose = px_z.permute(0,2,3,1).reshape(-1,512)
         # ----- px_z_transpose (batch, 32, 32, 512)------#
-        samples = torch.multinomial(px_z_transpose, 1, replacement=True)
         
+        try:
+            samples = torch.multinomial(px_z_transpose, 1, replacement=True)
+        except:
+            return None
         samples = samples.to(dtype=torch.float).mean(dim=1).to(dtype=torch.int64)
         
         return samples.view(px_z.shape[0], px_z.shape[2], px_z.shape[3])

@@ -240,11 +240,12 @@ class VAE(HModule):
         self.decoder = Decoder(self.H)
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.softmax = nn.Softmax(dim=1)
+        self.cuda()
     
     def forward_with_sum_nll(self, x, x_target):
         x = utils.clusters_to_images(x).permute(0,2,3,1)
-        x = x.cuda()
-        x_target = x_target.cuda()
+        x = x
+        x_target = x_target
         activations = self.encoder.forward(x)
         px_z, stats = self.decoder.forward(activations)
         px_z_log = self.logsoftmax(px_z)
@@ -285,15 +286,20 @@ class VAE(HModule):
         return stats
 
     def forward_uncond_samples(self, n_batch, t=None):
+        
         px_z = self.decoder.forward_uncond(n_batch, t=t)
         px_z = self.softmax(px_z)
+        if np.isfinite(px_z.detach().cpu().numpy()).sum() != px_z.detach().cpu().numel():
+            return None
         return self.decoder.out_net.sample(px_z)
 
     def forward_samples_set_latents(self, n_batch, latents, t=None, prob_vector=False, x = None):
         px_z = self.decoder.forward_manual_latents(n_batch, latents, t=t)
         px_z_log = self.logsoftmax(px_z)
+        if np.isfinite(px_z_log.detach().cpu()).sum() != px_z_log.detach().numel():
+            return torch.zeros(1), torch.zeros(1), torch.zeros(1)
         if x is not None:
-            px_z_log = self.decoder.out_net.nll(px_z_log, x[None, :])
+            px_z_log = self.decoder.out_net.nll_with_sum(px_z_log, x[None, :])
         if prob_vector:
-            return self.decoder.out_net.sample(self.softmax(px_z)), px_z_log, self.softmax(px_z)
+            return self.decoder.out_net.sample(torch.exp(self.logsoftmax(px_z))), px_z_log, 0
         return self.decoder.out_net.sample(self.softmax(px_z))

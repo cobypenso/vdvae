@@ -8,13 +8,10 @@ from hps import Hyperparams, parse_args_and_update_hparams, add_vae_arguments
 from utils import (logger,
                    maybe_download)
 from data import mkdir_p
-from contextlib import contextmanager
 import torch.distributed as dist
 from torch.optim import Adam
 #from apex.optimizers import FusedAdam as AdamW
 from vae import VAE
-from torch.nn.parallel.distributed import DistributedDataParallel
-import subprocess
 
 def update_ema(vae, ema_vae, ema_rate):
     for p1, p2 in zip(vae.parameters(), ema_vae.parameters()):
@@ -22,13 +19,11 @@ def update_ema(vae, ema_vae, ema_rate):
         p2.data.add_(p1.data * (1 - ema_rate))
 
 
-def save_model(path, vae, ema_vae, optimizer, H):
+def save_model(path, vae, ema_vae, optimizer, H, save_opt=True):
     torch.save(vae.state_dict(), f'{path}-model.th')
-    torch.save(ema_vae.state_dict(), f'{path}-model-ema.th')
-    torch.save(optimizer.state_dict(), f'{path}-opt.th')
-    from_log = os.path.join(H.save_dir, 'log.jsonl')
-    to_log = f'{os.path.dirname(path)}/{os.path.basename(path)}-log.jsonl'
-    subprocess.check_output(['cp', from_log, to_log])
+    # torch.save(ema_vae.state_dict(), f'{path}-model-ema.th')
+    if save_opt:
+        torch.save(optimizer.state_dict(), f'{path}-opt.th')
 
 
 def accumulate_stats(stats, frequency):
@@ -111,7 +106,7 @@ def load_vaes(H, logprint):
     ema_vae.requires_grad_(False)
 
     vae = vae.cuda()
-    ema_vae = ema_vae.cuda()
+    # ema_vae = ema_vae.cuda()
 
     if len(list(vae.named_parameters())) != len(list(vae.parameters())):
         raise ValueError('Some params are not named. Please name all params.')
@@ -128,6 +123,6 @@ def load_opt(H, vae, logprint):
     if H.restore_optimizer_path:
         state_dict = torch.load(H.restore_optimizer_path)
         optimizer.load_state_dict(state_dict)
-    cur_eval_loss, iterate, starting_epoch = float('inf'), 10000, 100
+    cur_eval_loss, iterate, starting_epoch = float('inf'), H.starting_iterate, H.starting_epoch
     logprint('starting at epoch', starting_epoch, 'iterate', iterate, 'eval loss', cur_eval_loss)
     return optimizer, scheduler, cur_eval_loss, iterate, starting_epoch
