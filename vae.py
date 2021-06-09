@@ -124,8 +124,12 @@ class DecBlock(nn.Module):
         # --- Calculate probabilities --- #
         #TODO - this part still in development, isn't working yet
         #       (no effect on other functionalities such as training, sampling etc')
-        log_q_zGx = Normal(0, 1).log_prob((z - qm)/torch.exp(pv))
-        log_p_z = Normal(0, 1).log_prob((z- pm)/torch.exp(qv))
+        # log_q_zGx = Normal(qm, qv).log_prob(z)
+        # log_p_z = Normal(pm, pv).log_prob(z)
+        
+        log_q_zGx = Normal(0, 1).log_prob((z - qm)/torch.exp(qv))
+        log_p_z = Normal(0, 1).log_prob((z- pm)/torch.exp(pv))
+
 
         # ------------------------------- #
 
@@ -244,19 +248,20 @@ class VAE(HModule):
     
     def forward_with_sum_nll(self, x, x_target):
         x = utils.clusters_to_images(x).permute(0,2,3,1)
-        x = x
+        x = x.cuda()
         x_target = x_target
         activations = self.encoder.forward(x)
         px_z, stats = self.decoder.forward(activations)
         px_z_log = self.logsoftmax(px_z)
         #Check here
-        distortion_per_pixel = self.decoder.out_net.nll_with_sum(px_z_log, x_target)
+        distortion_per_pixel = self.decoder.out_net.nll(px_z_log, x_target)
         rate_per_pixel = torch.zeros_like(distortion_per_pixel)
         ndims = np.prod(x.shape[1:])
         
         for statdict in stats:
             rate_per_pixel += statdict['kl'].sum(dim=(1, 2, 3))
         rate_per_pixel /= ndims
+        import ipdb; ipdb.set_trace()
         elbo = (distortion_per_pixel + rate_per_pixel).mean()
         return dict(elbo=elbo, distortion=distortion_per_pixel.mean(), rate=rate_per_pixel.mean())
 
@@ -275,6 +280,7 @@ class VAE(HModule):
         for statdict in stats:
             rate_per_pixel += statdict['kl'].sum(dim=(1, 2, 3))
         rate_per_pixel /= ndims
+        import ipdb; ipdb.set_trace()
         elbo = (distortion_per_pixel + rate_per_pixel).mean()
         return dict(elbo=elbo, distortion=distortion_per_pixel.mean(), rate=rate_per_pixel.mean())
 

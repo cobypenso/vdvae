@@ -42,7 +42,6 @@ def elbo_calc(x, H, vae, logprint, K = 200):
     '''
     x = x[0].cuda()
     sum = 0
-    
     for i in range(K):
         stats = vae.forward_with_sum_nll(x[None, :], x[None, :])
         sum += stats['elbo']
@@ -92,11 +91,14 @@ def iwae_calc_manual(x, H, vae, logprint, K = 200, idx=0):
     iwae_tensor = torch.from_numpy(np.nan_to_num(iwae_tensor))
     log_weight = iwae_tensor - torch.max(iwae_tensor, 0)[0]
     weight = torch.exp(log_weight)
+
+    
+
     weight = torch.from_numpy(np.nan_to_num(weight))
     weight = weight / torch.sum(weight, 0)
 
     # scaling
-    loss = torch.mean(-torch.sum(weight * (iwae_tensor), 0)) / 1024
+    loss = torch.mean(-torch.sum(weight * (iwae_tensor), 0))
     # iwae = torch.log(sum/K)
     return loss
 
@@ -172,12 +174,14 @@ def main_test():
             if torch.sum(np.isfinite(x[0])) - x[0].shape[0] > 0:
                 elbo_list.append(0)
             else:
-                iwae = iwae_calc_manual(x, H, vae, logprint, K=5, idx = idx)
-                # elbo = elbo_calc(x, H, vae, logprint, K=5)
+                # iwae = iwae_calc_manual(x, H, vae, logprint, K=10, idx = idx)
+                elbo = elbo_calc(x, H, vae, logprint, K=5)
                 # print ('elbo: ', elbo, ' iwae: ', iwae)
-                elbo_list.append(iwae)
-            if idx % 1000 == 0:
-                print(str(idx)+' image - '+str(iwae))
+                # elbo_list.append(iwae)
+                elbo_list.append(elbo)
+            if idx % 1 == 0:
+                # print(str(idx)+' image - '+str(iwae))
+                print(str(idx)+' image - '+str(elbo))
         # -- Save results to file -- #
         fname = H.model_type + "_model_iwae_calc_epoch_" + str(epoch) +"_test.p"
         pickle.dump(elbo_list, open(fname, "wb"))

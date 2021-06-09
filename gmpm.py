@@ -116,7 +116,9 @@ nll2prob = lambda a: np.exp(-1 * a)/1024
 
 imagegpt_dataset = load_file(args.imagegpt_res)
 vdvae_data = load_file(args.vdvae_data)
-import ipdb; ipdb.set_trace()
+
+metrics_dict = {}
+
 for root, dirs, files in os.walk(args.vdvae_res):
     for file in files:
         
@@ -190,11 +192,14 @@ for root, dirs, files in os.walk(args.vdvae_res):
             curr_run_str = file[:-2]
 
             # Saving results to text file :
-
+            epoch = curr_run_str.split('_')[-2]
+            
             file_name = curr_run_str + ".txt"
             file_name = os.path.join(root, file_name)
             file = open(file_name,"a")
-
+            
+            metrics_dict[epoch] = {'kl':kl_d, 'rev_kl':rev_kl_d, 'tot_var_dist':tot_var_dist_res, 'js':js_divergence_res}
+            
             curr_run_str = curr_run_str
             kl_d_str = "kl_d = " + str(kl_d)
             rev_kl_d_str = "rev_kl_d = " + str(rev_kl_d)
@@ -203,3 +208,6 @@ for root, dirs, files in os.walk(args.vdvae_res):
 
             file.write('%r\n%r\n%r\n%r\n%r\n' % (curr_run_str, kl_d_str, rev_kl_d_str, tot_var_dist_str, js_divergence_str))
             file.close()
+            
+with open('small_distance_metrics.p','wb') as f:
+    pickle.dump(metrics_dict, f)

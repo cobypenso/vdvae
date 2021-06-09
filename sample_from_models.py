@@ -56,7 +56,7 @@ def main():
     H, data_train, data_valid_or_test, preprocess_fn = set_up_data(H)
     
     # Load the models from various epochs #
-    epochs = [0,1,5,10,15,20,25,30,35,40,45,50]
+    epochs = [1,5,10,15,20,25,30,35,40]
     
     for epoch in epochs:
         vae = load_trained_vaes(H, logprint, epoch)

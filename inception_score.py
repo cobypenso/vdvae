@@ -114,7 +114,7 @@ parser.add_argument(
     "--path",
     type=str,
     help="Path to ImageGPT results",
-    default='./samples_medium/model_epoch_0/'
+    default='./samples_small_model_lower_lr/model_epoch_0/'
 )
 
 args = parser.parse_args()
@@ -125,7 +125,7 @@ transform = transforms.Compose([transforms.ToTensor(),
                                 
 dict_is = {'medium_model_lower_lr':{}}
 for model_type in ['medium_model_lower_lr']:
-    for i in [0,1,5,10,15,20,25,30,35,40,45,50]:
+    for i in [0,1,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]:
         fname = './samples_' + model_type + '/model_epoch_' + str(i)
         dataset = SamplesForlder(fname, transform=transform)
         mean_split_scores, std_split_scores = inception_score(dataset, cuda=True, batch_size=32, resize=True, splits=1)
